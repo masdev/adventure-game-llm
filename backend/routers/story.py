@@ -45,9 +45,9 @@ def create_story(
 
     background_tasks.add_task(
         generate_story_task,
-        job_id=job.job_id,
-        theme=job.theme,
-        session_id=job.session_id
+        job_id=job_id,
+        theme=request.theme,
+        session_id=session_id
     )
 
     db.add(job)
@@ -72,7 +72,7 @@ def generate_story_task(job_id: str, theme: str, session_id: str):
             # todo generate story
             story = {}
 
-            job.job_id = 1  # TODO update story id
+            job.story_id = 1  # TODO update story id
             job.status = "completed"
             job.completed_at = datetime.now()
             db.commit()
