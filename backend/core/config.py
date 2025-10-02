@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     ALLOWED_ORIGINS: str = ""
-    OPEN_AI_KEY: str = ""
+    OPEN_AI_KEY: str
 
     @field_validator("ALLOWED_ORIGINS")
     def parse_allowed_origins(cls, value: str) -> List[str]:

@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 
-from core.prompts import STORY_PROMPT
+from core.prompts import STORY_PROMPT, json_structure
 from models.story import Story, StoryNode
 from core.models import StoryLLMResponse, StoryNodeLLM
 
@@ -23,30 +23,22 @@ class StoryGenerator():
         serviceurl = os.getenv("CHOREO_OPENAI_CONNECTION_SERVICEURL")
 
         if openai_api_key and serviceurl:
-            chatOpenAI = ChatOpenAI(
-                model="gpt-4o-mini", api_key=openai_api_key)  # , base_url=serviceurl)
+            return ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, base_url=serviceurl)
 
-            print("After LLM constructor")
-            return chatOpenAI
+        return ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key)
 
     @classmethod
     def generate_story(cls, db: Session, session_id: str, theme: str = "fantasy") -> Story:
         llm = cls._get_llm()
-        print("LLM initiated")
 
         story_parser = PydanticOutputParser(pydantic_object=StoryLLMResponse)
 
-        print("story_parser initiated")
         prompt = ChatPromptTemplate.from_messages([
             ("system", STORY_PROMPT),
             ("human", f"Create the story with this {theme}")
         ]).partial(format_instructions=story_parser.get_format_instructions())
 
-        print(type(llm))
-        print("LLM" + llm.get_prompts)
-        print("before llm call with prompt instructions")
         raw_response = llm.invoke(prompt.invoke({}))
-        print("after llm call with prompt instructions")
 
         response_text = raw_response
         if hasattr(raw_response, "content"):
@@ -62,38 +54,38 @@ class StoryGenerator():
         if isinstance(root_node_data, dict):
             root_node_data = StoryNodeLLM.model_validate(root_node_data)
 
-        cls._process_story_node(db, story_db.id, root_node_data, is_root=True)
+        cls._process_story_node(
+            db=db, story_id=story_db.id, node_data=root_node_data, is_root=True)
 
         db.commit()
 
         return story_db
 
+    @classmethod
+    def _process_story_node(cls, db: Session, story_id: int, node_data: StoryNodeLLM, is_root: bool = False) -> StoryNode:
+        node = StoryNode(
+            story_id=story_id,
+            content=node_data.content if hasattr(
+                node_data, "content") else node_data["content"],
+            is_root=is_root,
+            is_ending=node_data.isEnding if hasattr(
+                node_data, "isEnding") else node_data["isEnding"],
+            is_winning_ending=node_data.isWinning if hasattr(
+                node_data, "isWinning") else node_data["isWinning"],
+            options=[]
+        )
 
-@classmethod
-def _process_story_node(cls, db: Session, story_id: int, node_data: StoryNodeLLM, is_root: bool = False) -> StoryNode:
-    node = StoryNode(
-        story_id=story_id,
-        content=node_data.content if hasattr(
-            node_data, "content") else node_data["content"],
-        is_root=is_root,
-        is_ending=node_data.isEnding if hasattr(
-            node_data, "isEnding") else node_data["isEnding"],
-        is_winning_ending=node_data.isWinningEnding if hasattr(
-            node_data, "isWinningEnding") else node_data["isWinningEnding"],
-        options=[]
-    )
+        db.add(node)
+        db.flush()
 
-    db.add(node)
-    db.flush()
+        # fill options value
+        if not node.is_ending and (hasattr(node_data, "options") and node_data.options):
+            options_list = []
+            for options_data in node_data.options:
+                next_node = options_data.nextNode
 
-    # fill options value
-    if not node.is_ending and (hasattr(node_data, "options") and node_data.options):
-        options_list = []
-        for options_data in node_data.options:
-            next_node = options_data.nextNode
-
-            if isinstance(next_node, dict):
-                next_node = StoryNodeLLM.model_validate(next_node)
+                if isinstance(next_node, dict):
+                    next_node = StoryNodeLLM.model_validate(next_node)
 
                 child_node = cls._process_story_node(
                     db=db, story_id=story_id, node_data=next_node, is_root=False)
@@ -103,8 +95,8 @@ def _process_story_node(cls, db: Session, story_id: int, node_data: StoryNodeLLM
                     "node_id": child_node.id
                 })
 
-                node.options = options_list
+            node.options = options_list
 
-    db.flush()
+        db.flush()
 
-    return node
+        return node
