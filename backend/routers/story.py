@@ -93,14 +93,12 @@ def get_complete_story(story_id: int, db: Session = Depends(get_db)):
     if not story:
         raise HTTPException(status_code=404, detail="No story found")
 
-    print("Before build story")
     complete_story = build_story_tree(db, story)
     return complete_story
 
 
 def build_story_tree(db: Session, story: Story) -> CompleteStoryResponse:
     nodes = db.query(StoryNode).filter(StoryNode.story_id == story.id).all()
-    print(f"build story ALL nodes size {len(nodes)}")
 
     node_dict = {}
     for node in nodes:
@@ -113,8 +111,6 @@ def build_story_tree(db: Session, story: Story) -> CompleteStoryResponse:
             options=node.options
         )
         node_dict[node.id] = node_response
-        print(f"build story node.id {node.id}")
-        print(f"build story options size {len(node.options)}")
 
     root_node = next((node for node in nodes if node.is_root), None)
     if not root_node:
