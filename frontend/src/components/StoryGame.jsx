@@ -9,7 +9,7 @@ function StoryGame({ story, onNewStory }) {
 
     useEffect(() => {
         if (story && story.root_node) {
-            const rootNodeId = story.rootNodeId;
+            const rootNodeId = story.root_node.id;
             setCurrentNodeId(rootNodeId);
         }
     }, [story]);
